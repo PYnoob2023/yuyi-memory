@@ -1,0 +1,10 @@
+{
+  "id": "demo-result-1",
+  "occurrence_id": "demo-case-1",
+  "session_id": "fictional-demo",
+  "occurred_at": 1700000000,
+  "scope": "debugging",
+  "kind": "verified_outcome",
+  "origin": "experienced",
+  "verified": true
+}

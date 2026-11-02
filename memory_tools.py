@@ -6,7 +6,7 @@ RECALL_TOOL = {
     'description': '按线索查找真实保存的往事；只能返回仍可记起的内容，不能恢复已删除细节。',
     'parameters': {'type': 'object', 'properties': {
         'query': {'type': 'string', 'maxLength': 500},
-        'char_budget': {'type': 'integer', 'minimum': 1, 'maximum': 1200}},
+        'char_budget': {'type': 'integer', 'minimum': 15, 'maximum': 1200}},
         'required': ['query'], 'additionalProperties': False},
 }
 
@@ -27,16 +27,18 @@ class MemoryTools:
         query, budget = arguments.get('query'), arguments.get('char_budget', 400)
         if not isinstance(query, str) or len(query) > 500:
             raise ValueError('query must be a string of at most 500 characters')
-        if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 1200:
+        if isinstance(budget, bool) or not isinstance(budget, int) or not 15 <= budget <= 1200:
             raise ValueError('Invalid character budget')
         self.calls += 1
         results = []
         limit = min(budget, int(self.memory.cfg['context_char_budget']))
-        for memory in self.memory.retrieve(query):
+        if limit < len(json.dumps({'results': []})):
+            raise ValueError('Budget cannot hold the empty results envelope')
+        for memory in self.memory.recall_for_scheduler(
+                query, char_budget=limit, limit=self.memory.cfg['retrieve_k'], explain=True):
             entry = {'id': memory['id'], 'stage': memory['stage'],
-                     'kind': memory.get('kind', 'event'),
-                     'status': memory.get('status', 'recorded'),
-                     'content': self.memory._render(memory)}
+                     'kind': memory['kind'], 'status': memory['status'],
+                     'content': memory['text'], 'path': memory['path']}
             candidate = {'results': results + [entry]}
             # Budget includes the serialized envelope, not just text strings.
             if len(json.dumps(candidate, ensure_ascii=False)) <= limit:

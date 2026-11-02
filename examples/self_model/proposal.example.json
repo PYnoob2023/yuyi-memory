@@ -1,0 +1,8 @@
+{
+  "key": "debugging.log_check",
+  "category": "habit",
+  "scope": "debugging",
+  "statement": "在排查代码问题时，我倾向先核实日志。",
+  "support_ids": ["demo-result-1"],
+  "challenge_ids": []
+}

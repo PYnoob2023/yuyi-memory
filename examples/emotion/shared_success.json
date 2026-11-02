@@ -1,0 +1,14 @@
+{
+  "event_id": "demo-success-001",
+  "evidence_id": "demo-tool-result-001",
+  "session_id": "demo-session",
+  "timestamp": "2026-11-02T00:00:00+09:00",
+  "owner": "self",
+  "evidence_kind": "verified_outcome",
+  "verified": true,
+  "impact": {"pleasure": 0.9, "arousal": 0.65, "agency": 0.6},
+  "intensity": 0.85,
+  "confidence": 0.95,
+  "interpretation": "achievement",
+  "appraisal_status": "grounded"
+}

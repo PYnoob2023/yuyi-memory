@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yuyi-memory"
+version = "0.3.0"
+description = "Inspectable memory, simulated affect and self-model experiments for conversational assistants"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/PYnoob2023/yuyi-memory"
+
+[project.scripts]
+yuyi-emotion = "yuyi_emotion.__main__:main"
+yuyi-self = "yuyi_self.__main__:main"
+
+[tool.setuptools]
+packages = ["yuyi_emotion", "yuyi_self"]
+py-modules = ["companion_memory", "legacy_memory", "association_index", "memory_tools", "memory_scheduler", "project_memory", "work_memory", "turn_reader"]

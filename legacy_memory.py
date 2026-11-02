@@ -167,6 +167,23 @@ def _bigrams(s: str) -> set:
 def _content_bigrams(s: str) -> set:
     return {b for b in _bigrams(s) if b not in _STOP_BIGRAMS}
 
+_CJK_RUN = re.compile(r"[\u4e00-\u9fff]+")
+_ASCII_RUN = re.compile(r"[a-z0-9]{2,}")
+
+
+def _tokens(s: str) -> set:
+    """中文按两个字、英文和数字按整词；避免 hello 撞上 scheduler 里的 he/ll。"""
+    s = (s or "").lower()
+    out = set()
+    for run in _CJK_RUN.findall(s):
+        for i in range(len(run) - 1):
+            bg = run[i:i + 2]
+            if bg not in _STOP_BIGRAMS:
+                out.add(bg)
+    for word in _ASCII_RUN.findall(s):
+        out.add("w:" + word)
+    return out
+
 
 def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
@@ -610,7 +627,7 @@ class CompanionMemory:
         now = self.now()
         t = occurred_at if occurred_at is not None else now
         for m in self.episodes:  # 重复发生 = 巩固已有记忆,而不是新增一条
-            if _same(text, m["text"] or m["gist"] or m["impression"] or ""):
+            if m.get('kind', 'event') == ev.get('kind', 'event') and _same(text, m["text"] or m["gist"] or m["impression"] or ""):
                 m["importance"] = max(m["importance"], imp)
                 m["recall_count"] += 1
                 m["last_recalled"] = max(m["last_recalled"], t)
@@ -704,14 +721,14 @@ class CompanionMemory:
     @staticmethod
     def _relevance(q: set, m: dict) -> float:
         pieces = [m["text"], m["gist"], m["impression"], " ".join(m["keywords"])]
-        bg = _bigrams(" ".join(p for p in pieces if p))
+        bg = _tokens(" ".join(p for p in pieces if p))
         return len(q & bg) / max(1, min(len(q), len(bg))) if q and bg else 0.0
 
     def _retrieve_scored(self, query: str = "") -> list:
         """返回 [(记忆, 相关度)],不做任何巩固。"""
         self._decay_if_due()  # 先推进遗忘,再检索:过期的细节不会被读出
         c, now = self.cfg, self.now()
-        q = _bigrams(query)
+        q = _tokens(query)
         scored = []
         for m in self.episodes:
             r, rel = self.retention(m, now), self._relevance(q, m)

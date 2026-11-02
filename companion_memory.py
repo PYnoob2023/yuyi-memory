@@ -15,17 +15,20 @@ import sqlite3
 import threading
 import time
 import uuid
+from association_index import AssociationIndex
 
 from legacy_memory import (
     CompanionMemory as _Legacy, CONFIG as _OLD_CONFIG, DEFAULT_PERSONA,
     EXTRACT_PROMPT, DAY, deepseek_llm, _same, _conflicts, _bigrams,
-    _content_bigrams, _neg, _as_str, _as_int, _as_str_list, _parse_json,
+    _content_bigrams, _tokens, _neg, _as_str, _as_int, _as_str_list, _parse_json,
 )
 
 CONFIG = {**_OLD_CONFIG, 'pending_max': 500, 'confirmation_max': 100,
           'association_hops': 2, 'association_decay': .65, 'association_beam': 20,
           'edge_max': 2000, 'relationship_boost': .25, 'open_issue_boost': .12,
-          'state_char_budget': 400, 'trace_days': 30, 'trace_max': 50}
+          'state_char_budget': 400, 'trace_days': 30, 'trace_max': 50,
+          'cue_association': True, 'cue_half_life_days': 90,
+          'association_candidates': 80}
 _DELETE = re.compile(r'别记|别再记|忘掉|忘了这|删除|删掉|不再保留|不要记|别提|不想再提')
 _REJECT = re.compile(r'别叫|不要叫|别再叫|不喜欢|不许叫')
 _UNCERTAIN = re.compile(r'也许|可能|假如|如果|假设|开玩笑|角色扮演|据说|听说|是否|[?？]|吗[，。！!\s]*$')
@@ -47,6 +50,14 @@ class CompanionMemory(_Legacy):
     def __init__(self, data_dir='memory_data', config=None, now_fn=time.time,
                  user_title='老李', assistant_label='助手'):
         self.cfg = {**CONFIG, **(config or {})}
+        if not isinstance(self.cfg['cue_association'], bool):
+            raise ValueError('cue_association must be bool')
+        half_life = self.cfg['cue_half_life_days']
+        if isinstance(half_life, bool) or not isinstance(half_life, (int, float)) or not math.isfinite(half_life) or half_life <= 0:
+            raise ValueError('cue_half_life_days must be finite and positive')
+        cap = self.cfg['association_candidates']
+        if isinstance(cap, bool) or not isinstance(cap, int) or not 1 <= cap <= 1000:
+            raise ValueError('association_candidates must be 1..1000')
         for key in ('recent_keep', 'core_max', 'names_max', 'pending_max',
                     'retrieve_k', 'confirmation_max', 'edge_max', 'trace_max',
                     'association_beam', 'consolidate_every', 'min_turns_to_consolidate'):
@@ -264,6 +275,9 @@ class CompanionMemory(_Legacy):
         proposal = {'id': uuid.uuid4().hex, 'category': category, 'value': value,
                     'reason': reason, 'sources': self._refs(sources), 'target': target,
                     'created': self.now()}
+        if target:
+            current = next((f for f in self.core['facts'] if f['id'] == target), None)
+            proposal['target_fact'] = current['fact'] if current else None
         self.core['confirmations'].append(proposal)
         self.core['confirmations'] = self.core['confirmations'][-self.cfg['confirmation_max']:]
 
@@ -515,7 +529,7 @@ class CompanionMemory(_Legacy):
 
     def _add_event(self, ev, occurred_at=None):
         source_ids = {s['id'] for s in ev.get('sources', [])}
-        if source_ids and any(source_ids <= {s['id'] for s in m.get('sources', [])} and _same(ev['text'], m['text'] or m['gist'] or m['impression'] or '') for m in self.episodes):
+        if source_ids and any(m.get('kind','event') == ev.get('kind','event') and source_ids <= {s['id'] for s in m.get('sources', [])} and _same(ev['text'], m['text'] or m['gist'] or m['impression'] or '') for m in self.episodes):
             return False
         old_ids = {m['id'] for m in self.episodes}
         ok = super()._add_event(ev, occurred_at)
@@ -524,13 +538,18 @@ class CompanionMemory(_Legacy):
             if m is not None:
                 m['id'] = uuid.uuid4().hex
             if m is None:
-                m = next(m for m in self.episodes if _same(ev['text'], m['text'] or m['gist'] or m['impression'] or ''))
+                m = next(m for m in self.episodes if m.get('kind','event') == ev.get('kind','event') and _same(ev['text'], m['text'] or m['gist'] or m['impression'] or ''))
             for key in ('kind', 'status', 'relationship', 'anchors', 'source_role', 'time_precision'):
                 if key in ev:
                     # Repeating a promise must not reset a fulfilled promise to open.
                     if key == 'status' and m.get('status') in _CLOSED:
                         continue
-                    m[key] = ev[key]
+                    if key == 'relationship':
+                        m[key] = max(m.get(key,0),ev[key])
+                    elif key == 'anchors':
+                        m[key] = list(dict.fromkeys(m.get(key,[])+ev[key]))
+                    else:
+                        m[key] = ev[key]
             m['sources'] = self._merge_refs(m.get('sources', []), ev.get('sources', []))
             self._upgrade()
             for other in self.episodes:
@@ -551,7 +570,7 @@ class CompanionMemory(_Legacy):
                   'relationship': relationship, 'anchors': [a for a in (anchors or []) if isinstance(a, str) and len(a) >= 2 and a in text],
                   'status': 'open' if kind == 'promise' else 'recorded', 'source_role': 'trusted_caller'}
             self._add_event(ev)
-            return next((m['id'] for m in self.episodes if _same(text, m['text'] or m['gist'] or m['impression'] or '')), None)
+            return next((m['id'] for m in self.episodes if m.get('kind','event') == kind and _same(text, m['text'] or m['gist'] or m['impression'] or '')), None)
 
     def _revise_fact(self, f, new, sources):
         self.core['history'].append({'fact_id': f['id'], 'fact': f['fact'], 'valid_until': self.now(),
@@ -580,11 +599,19 @@ class CompanionMemory(_Legacy):
                 if category == 'event':
                     self._add_event(value, value.get('occurred_at'))
                 elif category == 'core':
+                    key = self._fact_key(value)
+                    if any(not _same(value,f['fact']) and ((key and key == f.get('key')) or _conflicts(value,f['fact'])) for f in self.core['facts']):
+                        raise ValueError('Current fact conflicts; request a fresh targeted confirmation')
                     self._add_core_candidate(value, True)
                 elif category == 'core_update':
                     target = next((f for f in self.core['facts'] if f['id'] == proposal['target']), None)
                     if target is None:
                         raise ValueError('Target no longer exists; request a fresh confirmation')
+                    if 'target_fact' not in proposal or target['fact'] != proposal['target_fact']:
+                        raise ValueError('Stale target; request a fresh confirmation')
+                    if value is not None and any(f['id'] != target['id'] and not _same(value,f['fact']) and
+                            ((self._fact_key(value) and self._fact_key(value) == f.get('key')) or _conflicts(value,f['fact'])) for f in self.core['facts']):
+                        raise ValueError('Another current fact conflicts; request fresh confirmation')
                     if value is None:
                         self._erase_fact(target['id'])
                     else:
@@ -600,7 +627,9 @@ class CompanionMemory(_Legacy):
                     'cancelled': r'取消|作废|不必|不用再', 'open': r'还没|尚未|重新|未解决'}
         text = ' '.join(t['text'] for t in turns)
         content = m['text'] or m['gist'] or m['impression'] or ''
-        if status not in patterns or not re.search(patterns[status], text) or not _content_bigrams(content) & _content_bigrams(text) or (status in _CLOSED and _neg(text)):
+        negated = (_neg(text) if status != 'cancelled' else bool(re.search(
+            r'没有取消|没取消|未取消|不(?:要|能|想|会|必)?取消|不用(?:再)?取消|无需取消|别(?:再)?取消|没有作废|未作废|不作废|不是.*(?:不必|不用再)',text)))
+        if status not in patterns or not re.search(patterns[status], text) or not _content_bigrams(content) & _content_bigrams(text) or (status in _CLOSED and negated):
             return False
         m['status'] = status
         m['status_sources'] = self._refs(turns)
@@ -643,38 +672,121 @@ class CompanionMemory(_Legacy):
         with self._atomic():
             return self._link(a, b, relation, [{'id': uuid.uuid4().hex, 'role': 'user', 'text': evidence, 't': self.now()}])
 
-    def _retrieve_scored(self, query=''):
+    def _recall_ranked(self, query=''):
+        if not isinstance(query, str):
+            raise ValueError('query must be text')
         self._decay_if_due()
-        q = _bigrams(query)
-        nodes = {m['id']: m for m in self.episodes if not m.get('suppressed')}
+        q = _tokens(query)
+        if not q:
+            return []
+        # Corrected episodes are historical evidence, not current recall material.
+        nodes = {m['id']: m for m in self.episodes
+                 if not m.get('suppressed') and not m.get('corrected')}
         direct = {mid: self._relevance(q, m) for mid, m in nodes.items()}
         activation = {mid: value for mid, value in direct.items() if value >= self.cfg['relevance_th']}
-        frontier = dict(activation)
-        for _ in range(self.cfg['association_hops']):
-            new = {}
-            for edge in self.core['edges']:
-                if edge['a'] not in nodes or edge['b'] not in nodes:
-                    continue
+        paths = {mid: [{'kind': 'direct', 'event': mid}] for mid in activation}
+        beam = self.cfg['association_beam']
+        cap = self.cfg['association_candidates']
+        frontier = dict(sorted(activation.items(), key=lambda x: (-x[1], x[0]))[:beam])
+        index = AssociationIndex(nodes, self.now(),
+                                 half_life_days=self.cfg['cue_half_life_days'], fanout=beam)
+        adjacent = {}
+        for edge in self.core['edges']:
+            # Old inferred shared_cue edges are superseded by the disposable index.
+            # Only evidence-backed links retain their original persistent weights.
+            if edge['relation'] == 'shared_cue':
+                continue
+            if edge['a'] in nodes and edge['b'] in nodes:
                 for a, b in ((edge['a'], edge['b']), (edge['b'], edge['a'])):
-                    value = frontier.get(a, 0) * edge['weight'] * self.cfg['association_decay']
-                    if value >= self.cfg['relevance_th'] and value > activation.get(b, 0):
-                        new[b] = max(value, new.get(b, 0))
-            frontier = dict(sorted(new.items(), key=lambda x: -x[1])[:self.cfg['association_beam']])
+                    adjacent.setdefault(a, []).append((b, edge['weight'], edge['relation']))
+        added = set()
+        for _ in range(self.cfg['association_hops']):
+            new, routes = {}, {}
+            for a, strength in frontier.items():
+                neighbors = [(b, w, {'kind': 'evidence_edge', 'relation': r})
+                             for b, w, r in adjacent.get(a, [])]
+                if self.cfg['cue_association']:
+                    neighbors += [(b, w, {'kind': 'shared_cue', 'cue': cue})
+                                  for b, w, cue in index.neighbors(a)]
+                for b, weight, reason in neighbors:
+                    value = strength * weight * self.cfg['association_decay']
+                    if value < self.cfg['relevance_th'] or value <= max(activation.get(b, 0), new.get(b, 0)):
+                        continue
+                    if b not in activation and b not in new and len(added) + len(set(new) - set(activation)) >= cap:
+                        continue
+                    new[b] = value
+                    routes[b] = paths[a] + [{**reason, 'from': a, 'event': b}]
+            frontier = dict(sorted(new.items(), key=lambda x: (-x[1], x[0]))[:beam])
             for mid, value in frontier.items():
+                if mid not in activation:
+                    added.add(mid)
                 activation[mid] = max(value, activation.get(mid, 0))
+                paths[mid] = routes[mid]
         def score(mid):
             m = nodes[mid]
             open_boost = self.cfg['open_issue_boost'] if m.get('status') == 'open' else 0
             return activation.get(mid, 0) + .4 * self.retention(m) + .03 * m['importance'] + open_boost
-        chosen = sorted(activation, key=score, reverse=True)[:self.cfg['retrieve_k']]
+        chosen = sorted(activation, key=lambda mid: (-score(mid), mid))[:self.cfg['retrieve_k']]
+        return [(nodes[mid], activation[mid], paths[mid]) for mid in chosen]
+
+    def _retrieve_scored(self, query=''):
+        # Preserve the legacy recent fallback only for legacy callers.
+        ranked = self._recall_ranked(query)
+        chosen = [m['id'] for m, _, _ in ranked]
+        nodes = {m['id']: m for m in self.episodes
+                 if not m.get('suppressed')}
         slots = min(2, self.cfg['retrieve_k'] - len(chosen))
         if slots:
             chosen += sorted((mid for mid, m in nodes.items() if m['stage'] == 'vivid' and mid not in chosen), key=lambda mid: -nodes[mid]['created'])[:slots]
-        return [(nodes[mid], activation.get(mid, 0)) for mid in chosen]
+        scores = {m['id']: rel for m, rel, _ in ranked}
+        return [(nodes[mid], scores.get(mid, 0)) for mid in chosen]
 
     def retrieve(self, query=''):
         with self._atomic():
             return copy.deepcopy([m for m, _ in self._retrieve_scored(query)])
+
+    def recall_for_scheduler(self, query, *, char_budget=400, limit=2, explain=False):
+        """Relevant episodes only, no recent fallback/core facts/persona or recall boost.
+
+        Decay maintenance may persist; merely checking relevance never reinforces memory.
+        """
+        if not isinstance(char_budget, int) or isinstance(char_budget, bool) or char_budget < 0:
+            raise ValueError('Invalid character budget')
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 0:
+            raise ValueError('Invalid limit')
+        with self._atomic():
+            chosen, used = [], 0
+            for m, relevance, path in self._recall_ranked(query):
+                if relevance < self.cfg['relevance_th'] or len(chosen) >= limit:
+                    continue
+                line = self._render(m)
+                if used + len(line) + 1 <= char_budget:
+                    entry = {'id': m['id'], 'text': line}
+                    if explain:
+                        entry.update(relevance=relevance, path=path,
+                                     stage=m['stage'], kind=m.get('kind', 'event'),
+                                     status=m.get('status', 'recorded'),
+                                     source_role=m.get('source_role', 'unknown'),
+                                     sources=copy.deepcopy(m.get('sources', [])))
+                    chosen.append(entry)
+                    used += len(line) + 1
+            return chosen
+
+    def facts_for_scheduler(self, *, char_budget=240):
+        """Bounded confirmed identity facts only; other facts require explicit retrieval."""
+        if isinstance(char_budget,bool) or not isinstance(char_budget,int) or char_budget < 0:
+            raise ValueError('Invalid fact budget')
+        with self._lock:
+            lines=[]
+            # Conservative allowlist. Never expose pending proposals or the whole fact store.
+            for f in self.core['facts']:
+                value=f['fact']
+                if not re.match(r'^(?:我的)?(?:名字(?:是|叫|：|:)|姓名(?:是|：|:)|生日(?:是|在|：|:))|^我叫',value):
+                    continue
+                line='- '+value+'\n'
+                if sum(map(len,lines))+len(line)<=char_budget:
+                    lines.append(line)
+            return ''.join(lines)
 
     def _render(self, m):
         text = super()._render(m)

@@ -254,18 +254,18 @@ def test_nicknames():
     mem, clk, d = new_mem()
     assert mem.user_title == "老李"
     assert "称呼" in Path(d, "persona.md").read_text(encoding="utf-8")
-    talk = dlg("以后你可以叫我宛彬", "好呀李大人,宛彬这个名字也不错,老李也行,我还能叫你超级超级超级长的称呼")
+    talk = dlg("以后你可以叫我小禾", "好呀李大人,小禾这个名字也不错,老李也行,我还能叫你超级超级超级长的称呼")
     run_batch(mem, clk, {"nicknames": [
-        {"name": "李大人", "explicit": False, "src": [2]}, {"name": "宛彬", "explicit": True, "src": [1]},
+        {"name": "李大人", "explicit": False, "src": [2]}, {"name": "小禾", "explicit": True, "src": [1]},
         {"name": "老李", "explicit": False, "src": [2]},
         {"name": "超级超级超级长的称呼", "explicit": False, "src": [2]}]}, talk)
-    assert active_names(mem) == ["宛彬"]                         # 明确要求立即记住;她自己起的先观察
-    assert sorted(n["name"] for n in mem.core["names"]) == ["宛彬", "李大人"]   # 默认称呼/过长的被忽略
+    assert active_names(mem) == ["小禾"]                         # 明确要求立即记住;她自己起的先观察
+    assert sorted(n["name"] for n in mem.core["names"]) == ["小禾", "李大人"]   # 默认称呼/过长的被忽略
     run_batch(mem, clk, {"nicknames": [{"name": "李大人", "explicit": False, "src": [2]}]},
               dlg("哈哈", "李大人今天辛苦啦"))
-    assert set(active_names(mem)) == {"宛彬", "李大人"}
+    assert set(active_names(mem)) == {"小禾", "李大人"}
     ctx = mem.build_context("")
-    assert "默认叫“老李”" in ctx and "宛彬" in ctx and "李大人" in ctx
+    assert "默认叫“老李”" in ctx and "小禾" in ctx and "李大人" in ctx
     shutil.rmtree(d)
 
 

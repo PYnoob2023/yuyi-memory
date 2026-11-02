@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070d13"><title>余忆 YUYI · 神经记忆舱</title><meta name="description" content="让每一次想起，都有迹可循。余忆交互式神经记忆舱。"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="noise" aria-hidden="true"></div>
+<header class="topbar">
+ <a class="brand" href="#" aria-label="余忆神经记忆舱首页"><svg viewBox="0 0 36 36"><path d="M18 2 33 10v16L18 34 3 26V10Z M18 2v32 M3 10l30 16M33 10 3 26"/><circle cx="18" cy="18" r="5"/></svg><strong>余忆<span>YUYI</span></strong><i></i><span class="brand-sub">NEURAL MEMORY SYSTEM<span>神经记忆舱 / 01</span></span></a>
+ <nav aria-label="主导航"><button class="nav active" data-view="network">神经网络<span>01</span></button><button class="nav" data-view="ledger">记忆账本<span>02</span></button><button class="nav" data-view="about">运行原理<span>03</span></button></nav>
+ <div class="top-actions"><span class="connection"><b></b><span id="connectionLabel">本地演示</span></span><button id="fullscreen" class="icon-button" aria-label="全屏展示" title="全屏展示">⛶</button><button class="outline" id="writeTop"><span>＋</span> 写入记忆</button></div>
+</header>
+<main>
+<div class="page-title"><div><div class="eyebrow"><span></span> EXPLICIT MEMORY / ASSOCIATIVE RECALL</div><h1>让每一次想起，<em>都有迹可循。</em></h1><p>将经历存入账本，让关联唤醒记忆。</p></div><div class="title-right"><span>MEMORY CORE</span><strong>余忆 <small>v2.1 / VISUAL</small></strong><div>显式存储 · 稀疏激活 · 可解释召回</div></div></div>
+<section id="networkView" class="view">
+<div class="workspace">
+ <section class="neural-panel" aria-label="可交互神经记忆网络">
+  <div class="panel-top"><div><span class="cross">⌖</span> 神经场 <span class="mono muted">/ NEURAL FIELD</span></div><span class="live"><b></b> <span id="fieldStatus">SYSTEM STANDBY</span></span></div>
+  <div class="field-wrap" id="fieldWrap"><canvas id="neuralCanvas" aria-label="可拖动旋转、点击查看记忆节点的三维神经网络"></canvas>
+   <div class="field-readout"><span>CONNECTOME / <b id="nodeCount">00</b></span><span>SYNAPTIC LINKS / <b id="linkCount">00</b></span><span>RECALL DEPTH / <b>02 HOPS</b></span></div>
+   <div class="axis"><span>Y</span><svg width="47" height="46"><path d="M9 35V8M9 35h29M9 35l17-17" fill="none" stroke="#4c6976"/><circle cx="9" cy="35" r="2" fill="#65e4cb"/></svg><i>X</i><b>Z</b></div>
+   <div class="field-caption"><span class="tiny-mark">◈</span><div><strong id="fieldCaption">记忆网络已就绪</strong><span id="fieldSubcaption">拖动旋转 · 滚轮缩放 · 点击神经元</span></div></div>
+   <div class="field-tools"><button id="rotate" class="icon-button selected" title="切换自动旋转" aria-label="切换自动旋转">↻</button><button id="resetCamera" class="icon-button" title="重置视角" aria-label="重置视角">⌖</button><button id="cinema" class="icon-button" title="沉浸展示" aria-label="沉浸展示">▣</button></div>
+   <div class="legend"><span><i class="teal"></i>事件节点</span><span><i class="amber"></i>关联线索</span><span><i class="white"></i>激活路径</span></div>
+   <div id="tooltip" class="tooltip" hidden></div>
+  </div>
+  <div class="network-footer"><span><b class="status-dot"></b> <span id="networkState">神经网络稳定</span></span><span class="mono">READ ONLY ≠ REINFORCE <b>↗</b></span></div>
+ </section>
+ <aside class="inspector">
+  <div class="inspector-heading"><span>记忆观察器</span><span class="mono">MEMORY INSPECTOR ↗</span></div>
+  <div class="selected-tag"><span><i></i> <span id="selectedStage">清晰记忆</span></span><span class="mono" id="selectedId">MEM_001</span></div>
+  <h2 id="selectedTitle"></h2><p id="selectedText" class="memory-text"></p>
+  <div id="selectedTags" class="tags"></div>
+  <div class="retention"><div><span>记忆保留率</span><strong id="retentionValue">98<small>%</small></strong></div><div class="bar"><span id="retentionBar"></span></div><div class="retention-scale"><span>IMPRESSION</span><span>VIVID</span></div></div>
+  <dl class="metadata"><div><dt>记忆类型</dt><dd id="memoryKind">事件 / EVENT</dd></div><div><dt>重要程度</dt><dd id="importance"></dd></div><div><dt>来源</dt><dd id="sourceLabel">虚构演示数据</dd></div></dl>
+  <div class="inspector-actions"><button id="recallSelected" class="outline">⌁ 从此记忆联想</button><button id="suppressSelected" class="icon-button" title="压制当前记忆" aria-label="压制当前记忆">⊘</button></div>
+  <section class="trace"><div class="section-label"><span>激活路径</span><span class="mono" id="traceCount">WAITING FOR SIGNAL</span></div><div id="traceContent" class="trace-content"><div class="trace-empty">⌁<p>输入一个线索<br><span>看看记忆如何被唤醒</span></p></div></div></section>
+ </aside>
+</div>
+<section class="recall-console"><div class="console-label"><span class="console-icon">⌘</span><div><strong>唤醒一段记忆</strong><span>RECALL A MEMORY</span></div></div><form id="recallForm"><label class="sr-only" for="query">输入记忆线索</label><input id="query" autocomplete="off" placeholder="试着输入「加班」，让联想开始…" maxlength="500"><kbd>/</kbd><button class="primary" id="recallButton" type="submit">启动召回 <span>↗</span></button></form><div class="suggestions"><span>试试</span><button data-query="加班">加班</button><button data-query="海边">海边</button><button data-query="咖啡">咖啡</button></div></section>
+<div class="bottom-strip"><div><span class="metric-icon">◈</span><strong id="statMemories">00</strong><span>已存储记忆</span></div><div><span class="metric-icon amber-text">⌁</span><strong id="statLinks">00</strong><span>有效关联</span></div><div><span class="metric-icon">◎</span><strong id="statActive">00</strong><span>本轮激活</span></div><div class="last-metric"><span id="storageLabel">浏览器持久存储</span><span class="mono">LOCAL-FIRST <b>●</b></span></div></div>
+</section>
+<section id="ledgerView" class="view" hidden><div class="ledger-header"><div><span class="eyebrow">THE SOURCE OF TRUTH</span><h2>记忆会淡去，来处仍清晰。</h2><p>关联负责想起，账本负责记住。</p></div><div><button class="outline" id="importButton">↓ 导入账本</button><button class="outline" id="exportButton">↑ 导出账本</button><input id="importFile" type="file" accept=".json,application/json" hidden></div></div><div id="ledgerList" class="ledger-list"></div></section>
+<section id="aboutView" class="view" hidden><div class="about-heading"><span class="eyebrow">BEHIND THE NEURAL FIELD</span><h2>记住事实。<br><em>唤醒关联。</em></h2><p>这是余忆记忆项目的可视化展舱。中央网络是记忆关系的艺术化表达，<br>不是生物脑扫描，也不代表运行了神经网络模型。</p></div><div class="principles"><article><span>01 / STORE</span><h3>显式记忆账本</h3><p>每段事件保有独立编号、内容、重要度和来源。浏览器演示保存在本机；本地 Python 模式使用刚才项目的 SQLite 账本。</p></article><article><span>02 / ACTIVATE</span><h3>稀疏关联召回</h3><p>直接线索激活事件，再通过共享关键词传播。路径点亮对应命中与联想；装饰神经元仅构成视觉背景。</p></article><article><span>03 / VERIFY</span><h3>回到账本核验</h3><p>压制、更正、遗忘的事件不进入新召回。读取不会自动巩固；关联路径解释怎样找到它，不证明事实为真。</p></article></div><div class="about-note"><b>数据状态</b><p id="modeDescription">当前使用虚构演示数据和浏览器本地存储，没有读取你的私人记忆。演示召回是前端轻量实现；完整 Python 算法可通过配套本地服务运行。</p></div></section>
+</main>
+<footer><span>余忆 <b>/</b> THE ARCHITECTURE OF REMEMBERING</span><span id="footerHint">DEMO DATA · NO PRIVATE MEMORIES</span><button id="helpButton">操作说明 ↗</button></footer>
+<dialog id="writeDialog"><form id="writeForm"><div class="dialog-heading"><div><span class="eyebrow">ENCODE A NEW MEMORY</span><h2>让这一刻，留下来。</h2></div><button type="button" class="icon-button" id="closeWrite" aria-label="关闭">×</button></div><label>记忆内容<textarea id="newText" rows="4" placeholder="写下一段已经确认的经历…" maxlength="1000" required></textarea></label><label>关联线索 <span>用逗号分隔，至少两个字</span><input id="newTags" placeholder="例如：蓝桥，加班，约定" maxlength="200"></label><label>重要程度 <strong id="importancePreview">8 / 10</strong><input id="newImportance" type="range" min="3" max="10" value="8"></label><p class="form-note">手动写入代表你已确认内容。记忆将保存在当前数据模式中。</p><button class="primary" type="submit">编码并写入 <span>＋</span></button><p id="writeError" class="error" role="alert"></p></form></dialog>
+<dialog id="helpDialog"><div class="dialog-heading"><h2>探索你的神经记忆舱</h2><button id="closeHelp" class="icon-button" aria-label="关闭">×</button></div><p>拖动画布旋转网络，滚轮缩放。点击发光事件查看账本，输入「加班」观看关联脉冲。</p><p>「写入记忆」会添加真实可再次读取的记录；记忆账本支持导入、导出、压制与删除。删除前会有确认步骤。</p><p>快捷键：<kbd>/</kbd> 输入线索 · <kbd>Esc</kbd> 退出沉浸模式。点击右上角 ⛶ 全屏展示。</p><p>浏览器演示数据仅留在当前设备。配套本地服务可直接运行余忆 Python 记忆模块。</p></dialog>
+<div id="toast" role="status" class="toast"></div>
+<script src="app.js"></script>
+</body></html>
