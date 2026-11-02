@@ -19,6 +19,8 @@ python -m unittest discover -v
 
 演示使用虚构内容和临时数据库，不调用真实模型。可直接从源码运行；也可选择 `python -m pip install .` 安装 Python 模块及命令行入口。安装构建工具可能需要联网，运行模块无需第三方依赖。
 
+在默认西文编码的 Windows 终端运行中文演示/测试时，使用 `python -X utf8 ...`，例如 `python -X utf8 -m unittest discover -v`。两个新命令行入口会自行将标准输出设为 UTF-8，库导入不会改宿主的编码设置。
+
 ## 四个部分
 
 | 部分 | 当前能力 | 说明 |

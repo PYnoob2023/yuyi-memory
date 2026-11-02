@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import time
 import sqlite3
+import sys
 
 from . import Config, EmotionEvent, EmotionStore, EmotionAtlas
 
@@ -22,6 +23,8 @@ def timestamp(value):
 
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='余忆独立情绪模块：三层状态、三维坐标、可回放事件。')
     parser.add_argument('--db', default='data/emotion.sqlite3')
     parser.add_argument('--assistant', default='companion')

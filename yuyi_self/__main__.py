@@ -3,10 +3,13 @@ from dataclasses import fields
 import json
 from pathlib import Path
 import sqlite3
+import sys
 from . import SelfModel,Evidence,Proposal,trial_report
 
 
 def main():
+    if hasattr(sys.stdout,'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     p=argparse.ArgumentParser(description='余忆自我模型：独立观察试运行。')
     p.add_argument('--db',default='data/self.sqlite3');p.add_argument('--assistant',required=True)
     sub=p.add_subparsers(dest='command',required=True)
